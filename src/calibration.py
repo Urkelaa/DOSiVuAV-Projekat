@@ -45,7 +45,12 @@ def calibrate(show=True):
 
 
 def load_calibration():
-    calibration = np.load(params.CALIB_FILE)
+    try:
+        calibration = np.load(params.CALIB_FILE)
+    except FileNotFoundError:
+        print("Nema fajla", params.CALIB_FILE, "- pokrecem kalibraciju")
+        calibrate(show=False)
+        calibration = np.load(params.CALIB_FILE)
     return calibration["mtx"], calibration["dist"], tuple(calibration["size"])
 
 

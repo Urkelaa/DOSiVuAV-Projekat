@@ -134,14 +134,17 @@ def draw_trapezoid(img):
     draw_polygon(img, params.WARP_SRC * np.float32([width, height]), params.TRAPEZ_COLOR)
 
 
-def histogram(binary_warped):
+def column_counts(binary_warped):
     height = binary_warped.shape[0]
     return np.sum(binary_warped[height // 2:, :] // 255, axis=0)
 
 
-def find_lane_pixels(binary_warped):
+def histogram(sobel_warped, color_warped):
+    return params.COLOR_HIST_WEIGHT * column_counts(color_warped) + column_counts(sobel_warped)
+
+
+def find_lane_pixels(binary_warped, hist):
     height, width = binary_warped.shape
-    hist = histogram(binary_warped)
     midpoint = width // 2
     leftx_current = int(np.argmax(hist[:midpoint]))
     rightx_current = int(np.argmax(hist[midpoint:])) + midpoint
@@ -191,15 +194,15 @@ def fit_x(fit, y):
     return a * y * y + b * y + c
 
 
-def draw_fit(img, fit, color):
+def draw_fit(img, fit, color, shift=0, thickness=params.FIT_THICKNESS):
     if fit is None:
         return
     height = img.shape[0]
     previous = None
     for y in range(0, height + params.CURVE_STEP, params.CURVE_STEP):
-        point = (int(fit_x(fit, y)), y)
+        point = (int(fit_x(fit, y) + shift), y)
         if previous is not None:
-            cv.line(img, previous, point, color, params.FIT_THICKNESS)
+            cv.line(img, previous, point, color, thickness)
         previous = point
 
 
@@ -223,11 +226,23 @@ def draw_histogram(hist):
     return img
 
 
-def fit_in_meters(pixels):
-    x, y = pixels
-    if len(x) < params.MIN_FIT_PIXELS:
-        return None
-    return np.polyfit(y * params.YM_PER_PIX, x * params.XM_PER_PIX, 2)
+def lane_width_px(width):
+    return (params.WARP_DST[1][0] - params.WARP_DST[0][0]) * width
+
+
+def xm_per_pix(width):
+    return params.LANE_WIDTH_M / lane_width_px(width)
+
+
+def ym_per_pix(height):
+    return params.VISIBLE_LENGTH_M / height
+
+
+def fit_to_meters(fit, width, height):
+    a, b, c = fit
+    xm = xm_per_pix(width)
+    ym = ym_per_pix(height)
+    return np.float32([a * xm / (ym * ym), b * xm / ym, c * xm])
 
 
 def curvature_radius(fit_m, y_m):
@@ -242,12 +257,13 @@ def warp_point(M, x, y):
     return px / pw, py / pw
 
 
-def vehicle_offset(left_fit, right_fit, M, roi_shape, warped_height):
+def vehicle_offset(left_fit, right_fit, M, roi_shape, warped_shape):
     roi_height, roi_width = roi_shape[:2]
+    warped_height, warped_width = warped_shape[:2]
     car_x, car_y = warp_point(M, roi_width / 2, roi_height - 1)
     y = warped_height - 1
     lane_center = (fit_x(left_fit, y) + fit_x(right_fit, y)) / 2
-    return (car_x - lane_center) * params.XM_PER_PIX
+    return (car_x - lane_center) * xm_per_pix(warped_width)
 
 
 def draw_lane_area(shape, left_fit, right_fit):
@@ -276,3 +292,59 @@ def is_departing(offset):
 def draw_warning(img):
     height, width = img.shape[:2]
     cv.rectangle(img, (0, 0), (width - 1, height - 1), params.WARNING_COLOR, params.WARNING_THICKNESS)
+
+
+
+def search_around_poly(binary_warped, left_fit, right_fit):
+    nonzeroy, nonzerox = binary_warped.nonzero()
+    left_mask = abs(nonzerox - fit_x(left_fit, nonzeroy)) < params.SEARCH_MARGIN
+    right_mask = abs(nonzerox - fit_x(right_fit, nonzeroy)) < params.SEARCH_MARGIN
+    left = (nonzerox[left_mask], nonzeroy[left_mask])
+    right = (nonzerox[right_mask], nonzeroy[right_mask])
+    return left, right
+
+
+def lane_widths(left_fit, right_fit, height):
+    return [fit_x(right_fit, y) - fit_x(left_fit, y) for y in (height - 1, height // 2, 0)]
+
+
+def is_valid(left_fit, right_fit, shape):
+    if left_fit is None or right_fit is None:
+        return False
+    height, width = shape[:2]
+    expected = lane_width_px(width)
+    widths = lane_widths(left_fit, right_fit, height)
+    if min(widths) < params.MIN_WIDTH_RATIO * expected:
+        return False
+    if max(widths) > params.MAX_WIDTH_RATIO * expected:
+        return False
+    return max(widths) - min(widths) < params.MAX_WIDTH_DIFF_RATIO * expected
+
+
+def draw_search_band(img, left_fit, right_fit):
+    for fit in (left_fit, right_fit):
+        draw_fit(img, fit, params.WINDOW_COLOR, -params.SEARCH_MARGIN, 2)
+        draw_fit(img, fit, params.WINDOW_COLOR, params.SEARCH_MARGIN, 2)
+
+
+def put_text(img, text, line, color):
+    x, y = params.TEXT_ORIGIN
+    origin = (x, y + line * params.TEXT_LINE_HEIGHT)
+    cv.putText(img, text, origin, params.TEXT_FONT, params.TEXT_SCALE, params.TEXT_OUTLINE_COLOR, params.TEXT_THICKNESS + 3)
+    cv.putText(img, text, origin, params.TEXT_FONT, params.TEXT_SCALE, color, params.TEXT_THICKNESS)
+
+
+def draw_info(img, info):
+    if info is None:
+        put_text(img, "Lane lines not found", 0, params.WARNING_COLOR)
+        return
+    left_radius, right_radius, offset = info
+    radius = (left_radius + right_radius) / 2
+    if radius > params.STRAIGHT_RADIUS:
+        put_text(img, "Radius of curvature: straight road", 0, params.TEXT_COLOR)
+    else:
+        put_text(img, f"Radius of curvature: {radius:.0f} m", 0, params.TEXT_COLOR)
+    side = "right" if offset > 0 else "left"
+    put_text(img, f"Vehicle is {abs(offset):.2f} m {side} of center", 1, params.TEXT_COLOR)
+    if is_departing(offset):
+        put_text(img, f"WARNING: lane departure {side.upper()}", 2, params.WARNING_COLOR)

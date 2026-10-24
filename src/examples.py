@@ -50,19 +50,21 @@ if __name__ == "__main__":
     for name in ["test2", "test1"]:
         road = calibration.undistort(cv.imread("course_files_export/Zadatak/test_images/" + name + ".jpg"), mtx, dist)
         roi = lane.crop_roi(road)
-        binary = cv.add(lane.sobel_x_binary(lane.to_gray(roi)), lane.color_binary(roi))
         M, Minv = lane.perspective_matrices(road)
-        warped_binary = lane.warper(binary, M, (width, height))
-        left, right, windows = lane.find_lane_pixels(warped_binary)
+        sobel_warped = lane.warper(lane.sobel_x_binary(lane.to_gray(roi)), M, (width, height))
+        color_warped = lane.warper(lane.color_binary(roi), M, (width, height))
+        warped_binary = cv.add(sobel_warped, color_warped)
+        hist = lane.histogram(sobel_warped, color_warped)
+        left, right, windows = lane.find_lane_pixels(warped_binary, hist)
         left_fit = lane.fit_polynomial(left)
         right_fit = lane.fit_polynomial(right)
         fit_img = lane.draw_lane_fit(warped_binary, left, right, windows, left_fit, right_fit)
-        hist_img = cv.resize(lane.draw_histogram(lane.histogram(warped_binary)), (width, params.HISTOGRAM_HEIGHT))
+        hist_img = cv.resize(lane.draw_histogram(hist), (width, params.HISTOGRAM_HEIGHT))
         save("color_fit_lines_" + name + ".jpg", np.vstack((fit_img, hist_img)))
         print(name, "levi fit:", left_fit, "desni fit:", right_fit)
 
     for name in ["test2", "test3", "straight_lines1"]:
-        result, info = main.process_frame(cv.imread("course_files_export/Zadatak/test_images/" + name + ".jpg"), calib)
+        result, info, debug = main.process_frame(cv.imread("course_files_export/Zadatak/test_images/" + name + ".jpg"), calib)
         save("example_output_" + name + ".jpg", result)
         main.report(info)
 
@@ -70,6 +72,6 @@ if __name__ == "__main__":
     for i in range(780):
         ret, frame = video.read()
     video.release()
-    result, info = main.process_frame(frame, calib)
+    result, info, debug = main.process_frame(frame, calib)
     save("example_output_warning.jpg", result)
     main.report(info)

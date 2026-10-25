@@ -1,3 +1,4 @@
+import os
 import sys
 
 import cv2 as cv
@@ -9,6 +10,7 @@ import main
 
 
 def make_video(input_path, output_path, calib):
+    os.makedirs(params.OUTPUT_VIDEOS_DIR, exist_ok=True)
     cap = cv.VideoCapture(input_path)
     fps = cap.get(cv.CAP_PROP_FPS)
     width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))

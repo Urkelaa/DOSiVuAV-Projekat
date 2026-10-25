@@ -87,6 +87,20 @@ MAX_WIDTH_DIFF_RATIO = 0.25
 MAX_SHIFT_RATIO = 0.15
 
 OUTPUT_VIDEOS_DIR = "output_videos"
+TEST_VIDEOS_DIR = "course_files_export/Zadatak/test_videos"
+
+WRITEUP_IMAGES = [
+    "undistort_chessboard.jpg",
+    "undistort_test1.jpg",
+    "binary_test1.jpg",
+    "binary_components_test1.jpg",
+    "warped_straight_lines.jpg",
+    "warped_test1.jpg",
+    "color_fit_lines_test2.jpg",
+    "example_output_test2.jpg",
+    "example_output_warning.jpg",
+]
+WRITEUP_VIDEOS = ["project_video03.mp4"]
 
 TEXT_FONT = cv2.FONT_HERSHEY_SIMPLEX
 TEXT_SCALE = 1.0

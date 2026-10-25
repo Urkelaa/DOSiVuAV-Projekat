@@ -1,3 +1,5 @@
+import os
+
 import cv2 as cv
 import numpy as np
 
@@ -13,8 +15,8 @@ def save(name, img):
     print("Sacuvano:", path)
 
 
-if __name__ == "__main__":
-    calib = calibration.load_calibration()
+def generate_examples(calib):
+    os.makedirs(params.EXAMPLES_DIR, exist_ok=True)
     mtx, dist, size = calib
 
     chess = cv.imread("course_files_export/Zadatak/camera_cal/calibration1.jpg")
@@ -75,3 +77,7 @@ if __name__ == "__main__":
     result, info, debug = main.process_frame(frame, calib)
     save("example_output_warning.jpg", result)
     main.report(info)
+
+
+if __name__ == "__main__":
+    generate_examples(calibration.load_calibration())

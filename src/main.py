@@ -7,6 +7,7 @@ import params
 import lane
 import calibration
 import tracker as tracking
+import outputs
 
 
 def process_frame(frame, calib, tracker=None):
@@ -202,6 +203,7 @@ if __name__ == "__main__":
     args = [arg for arg in sys.argv[1:] if arg != "--debug"]
     path = args[0] if len(args) > 0 else params.DEFAULT_INPUT
     calib = calibration.load_calibration()
+    outputs.ensure_outputs(calib)
     if path.endswith(".mp4"):
         run_video(path, calib, debug_mode)
     else:

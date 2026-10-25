@@ -81,21 +81,6 @@ def process_frame(frame, calib, tracker=None):
     return result, info, debug
 
 
-def report(info):
-    if info is None:
-        print("Linije trake nisu pronadjene")
-        return
-    left_radius, right_radius, offset = info
-    side = "desno" if offset > 0 else "levo"
-    print(f"Zakrivljenost: leva {left_radius:.0f} m, desna {right_radius:.0f} m | vozilo {abs(offset):.2f} m {side} od centra")
-
-
-def warning_message(info):
-    offset = info[2]
-    side = "DESNO" if offset > 0 else "LEVO"
-    return f"UPOZORENJE: napustanje trake {side} ({abs(offset):.2f} m od centra)"
-
-
 def debug_report(frame_index, info, debug):
     left_x, left_y = debug["left"]
     right_x, right_y = debug["right"]
@@ -103,18 +88,18 @@ def debug_report(frame_index, info, debug):
     if len(debug["windows"]) > 0:
         left_start = debug["windows"][0][0] + params.WINDOW_MARGIN
         right_start = debug["windows"][1][0] + params.WINDOW_MARGIN
-        text += f" start L={left_start} D={right_start}"
-    text += f" | piksela L={len(left_x)} D={len(right_x)}"
+        text += f" start L={left_start} R={right_start}"
+    text += f" | pixels L={len(left_x)} R={len(right_x)}"
     raw_left_fit = debug["raw_left_fit"]
     raw_right_fit = debug["raw_right_fit"]
     if raw_left_fit is not None and raw_right_fit is not None:
         height = debug["warped_binary"].shape[0]
         widths = lane.lane_widths(raw_left_fit, raw_right_fit, height)
-        text += f" | sirina dno={widths[0]:.0f} sred={widths[1]:.0f} vrh={widths[2]:.0f} px"
-    text += " | prihvacen" if debug["accepted"] else " | ODBACEN"
+        text += f" | lane width bottom={widths[0]:.0f} middle={widths[1]:.0f} top={widths[2]:.0f} px"
+    text += " | accepted" if debug["accepted"] else " | REJECTED"
     if info is not None:
         left_radius, right_radius, offset = info
-        text += f" | R L={left_radius:.0f} D={right_radius:.0f} m | pomeraj {offset:+.2f} m"
+        text += f" | R L={left_radius:.0f} R={right_radius:.0f} m | offset {offset:+.2f} m"
     print(text)
 
 
@@ -153,12 +138,10 @@ def show_phase(result):
 def run_image(path, calib, debug_mode):
     img = cv.imread(path)
     if img is None:
-        print("Ne mogu da ucitam sliku:", path)
+        print("Cannot open image:", path)
         return
+    print("Processing image", path, "(press any key to close)")
     result, info, debug = process_frame(img, calib)
-    report(info)
-    if info is not None and lane.is_departing(info[2]):
-        print(warning_message(info))
     if debug_mode:
         debug_report(0, info, debug)
         show_debug(debug)
@@ -168,9 +151,12 @@ def run_image(path, calib, debug_mode):
 
 def run_video(path, calib, debug_mode):
     cap = cv.VideoCapture(path)
+    if not cap.isOpened():
+        print("Cannot open video:", path)
+        return
+    print("Processing video", path, "(SPACE to pause, ESC to quit)")
     tracker = tracking.new_tracker()
     frame_index = 0
-    warned = False
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -183,12 +169,6 @@ def run_video(path, calib, debug_mode):
         if debug_mode:
             debug_report(frame_index, info, debug)
             show_debug(debug)
-        elif frame_index % params.PRINT_EVERY == 0:
-            report(info)
-        departing = info is not None and lane.is_departing(info[2])
-        if departing and not warned:
-            print(warning_message(info))
-        warned = departing
         show_phase(result)
         frame_index += 1
         key = cv.waitKey(params.FRAME_DELAY) & 0xFF

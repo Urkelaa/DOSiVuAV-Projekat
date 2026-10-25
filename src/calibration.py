@@ -7,6 +7,7 @@ import params
 
 
 def calibrate(show=True):
+    print("Calibrating camera...")
     criteria = (cv.TERM_CRITERIA_MAX_ITER + cv.TERM_CRITERIA_EPS, 30, 0.001)
     pattern = (params.CHESS_COLS, params.CHESS_ROWS)
 
@@ -25,22 +26,13 @@ def calibrate(show=True):
             object_points_array.append(object_points)
             img_points_array.append(corners)
             cv.drawChessboardCorners(img, pattern, corners, ret)
-        else:
-            print("Tabla nije nadjena:", path)
         if show:
             cv.imshow("Chessboard", img)
             cv.waitKey(params.CALIB_SHOW_DELAY)
 
     ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(object_points_array, img_points_array, gray.shape[::-1], None, None)
     np.savez(params.CALIB_FILE, mtx=mtx, dist=dist, rvecs=rvecs, tvecs=tvecs, size=gray.shape[::-1])
-
-    error = 0
-    for i in range(len(object_points_array)):
-        img_points, _ = cv.projectPoints(object_points_array[i], rvecs[i], tvecs[i], mtx, dist)
-        error += cv.norm(img_points_array[i].reshape(-1, 2), img_points.reshape(-1, 2), cv.NORM_L2) / len(img_points)
-
-    print("Iskorisceno slika:", len(object_points_array))
-    print("Greska reprojekcije:", error / len(object_points_array))
+    print("Calibration saved to", params.CALIB_FILE)
     return mtx, dist
 
 
@@ -48,7 +40,6 @@ def load_calibration():
     try:
         calibration = np.load(params.CALIB_FILE)
     except FileNotFoundError:
-        print("Nema fajla", params.CALIB_FILE, "- pokrecem kalibraciju")
         calibrate(show=False)
         calibration = np.load(params.CALIB_FILE)
     return calibration["mtx"], calibration["dist"], tuple(calibration["size"])

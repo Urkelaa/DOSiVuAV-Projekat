@@ -12,10 +12,10 @@ import main
 def save(name, img):
     path = params.EXAMPLES_DIR + "/" + name
     cv.imwrite(path, img)
-    print("Sacuvano:", path)
 
 
 def generate_examples(calib):
+    print("Creating example images in", params.EXAMPLES_DIR, "...")
     os.makedirs(params.EXAMPLES_DIR, exist_ok=True)
     mtx, dist, size = calib
 
@@ -63,12 +63,10 @@ def generate_examples(calib):
         fit_img = lane.draw_lane_fit(warped_binary, left, right, windows, left_fit, right_fit)
         hist_img = cv.resize(lane.draw_histogram(hist), (width, params.HISTOGRAM_HEIGHT))
         save("color_fit_lines_" + name + ".jpg", np.vstack((fit_img, hist_img)))
-        print(name, "levi fit:", left_fit, "desni fit:", right_fit)
 
     for name in ["test2", "test3", "straight_lines1"]:
         result, info, debug = main.process_frame(cv.imread("course_files_export/Zadatak/test_images/" + name + ".jpg"), calib)
         save("example_output_" + name + ".jpg", result)
-        main.report(info)
 
     video = cv.VideoCapture("course_files_export/Zadatak/test_videos/project_video03.mp4")
     for i in range(780):
@@ -76,7 +74,8 @@ def generate_examples(calib):
     video.release()
     result, info, debug = main.process_frame(frame, calib)
     save("example_output_warning.jpg", result)
-    main.report(info)
+
+    print("Example images saved")
 
 
 if __name__ == "__main__":
